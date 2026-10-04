@@ -1,0 +1,31 @@
+[project]
+name = "aivillage"
+version = "0.1.0"
+description = "Tools for processing the AI Village dataset (aidigestorg/ai-village on Hugging Face)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.1",
+    "huggingface-hub>=0.25",
+    "polars>=1.0",
+    "pyarrow>=16",
+]
+
+[project.scripts]
+aiv = "aivillage.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
