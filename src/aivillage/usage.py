@@ -98,6 +98,13 @@ def extract(response: Any) -> Usage | None:
     return normalize(u) if u is not None else None
 
 
+def response_id(response: Any) -> str | None:
+    """The provider's id for a raw response (Anthropic ``msg_…``, Gemini ``responseId``)."""
+    if isinstance(response, dict) and isinstance(response.get("message"), dict):
+        response = response["message"]  # Claude Code SDK entries wrap the API message
+    return _find(response, ("responseId", "id"), str)
+
+
 def model(response: Any) -> str | None:
     """The model name a raw response reports, if any (e.g. ``modelVersion``)."""
     m = _find(response, _MODEL_KEYS, str)

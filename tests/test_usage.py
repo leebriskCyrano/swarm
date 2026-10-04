@@ -73,3 +73,10 @@ def test_model():
     assert usage.model(ANTHROPIC) == "claude-opus-4-5-20251101"
     assert usage.model(GEMINI) == "gemini-2.5-pro"
     assert usage.model([{"type": "message"}]) is None
+
+
+def test_response_id():
+    assert usage.response_id(ANTHROPIC) == "msg_1"
+    assert usage.response_id({"uuid": "u", "message": ANTHROPIC}) == "msg_1"
+    assert usage.response_id({"responseId": "r9", "candidates": []}) == "r9"
+    assert usage.response_id(None) is None
