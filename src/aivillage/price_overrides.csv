@@ -1,0 +1,6 @@
+model,start,input_mtok,cache_read_mtok,cache_write_mtok,output_mtok,source,note
+deepseek-reasoner,2025-12-01,0.28,0.028,,0.42,"LiteLLM model_prices_and_context_window.json, key deepseek/deepseek-reasoner (set 2026-01)","DeepSeek-V3.2 rates. genai-prices 0.1.9 still has R1-era 0.55/2.19 for this alias. Official archived pages weren't reachable from the build environment; verify against api-docs.deepseek.com history."
+z-ai/glm-5.2,2026-07-01,0.6496,0.1206,,2.0416,"LiteLLM snapshot 2026-09-20, key openrouter/z-ai/glm-5.2","Approximate: OpenRouter blends upstream providers and this rate moved 0.60-0.97 (input) over Sep 2026."
+z-ai/glm-5.3-flash,2026-08-01,0.09,0.018,,0.30,"LiteLLM snapshot 2026-09-20, key openrouter/z-ai/glm-5.3-flash","Approximate: OpenRouter rate moved 0.075-0.15 (input) over Sep 2026."
+deepseek/deepseek-v4-pro,2026-07-01,0.4223,0.0352,,0.8446,"LiteLLM snapshot 2026-09-20, key openrouter/deepseek/deepseek-v4-pro","Approximate: OpenRouter rate moved 0.42-1.32 (input) over Aug-Sep 2026."
+meta/muse-spark-1.3,2026-09-01,1.25,0.15,,4.25,"LiteLLM snapshot 2026-09-20, key meta/muse-spark-1.3; matches OpenRouter listing 2026-10-04",
