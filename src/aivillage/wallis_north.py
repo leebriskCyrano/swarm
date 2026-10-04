@@ -84,8 +84,33 @@ def work_transaction_share() -> dict[str, Share]:
     return {regime: wilson(k, n) for regime, (k, n) in counts.items()}
 
 
+def population() -> dict:
+    """Per month: active days, agent-days and agent-hours.
+
+    An agent is active on a day if it made any model call. Its active hours that
+    day run from its first call to its last, which tracks the village schedule
+    (4h/day, 8h/day from 2026-06-29) without hard-coding it. Days are village
+    (Pacific) days: the 9am-5pm PT window crosses UTC midnight. A fixed -8h
+    shift is enough, as sessions never come near PT midnight.
+    """
+    sql = f"""
+    WITH d AS (
+      SELECT agent_id, (created_at - INTERVAL 8 HOUR)::DATE AS dy,
+             (epoch(max(created_at)) - epoch(min(created_at))) / 3600 AS hours
+      FROM '{costs.path()}' WHERE agent_id IS NOT NULL GROUP BY ALL
+    )
+    SELECT date_trunc('month', dy)::DATE AS month, count(DISTINCT dy) AS days,
+           count(*) AS agent_days, sum(hours) AS agent_hours,
+           count(DISTINCT agent_id) AS agents
+    FROM d GROUP BY ALL"""
+    return {
+        month: {"days": days, "agent_days": ad, "agent_hours": ah, "agents": agents}
+        for month, days, ad, ah, agents in duckdb.sql(sql).fetchall()
+    }
+
+
 def monthly(price: str = "cost") -> list[dict]:
-    """One row per month: spend by category, the estimated transaction sector, unit costs.
+    """One row per month: spend by category, the transaction sector, unit and per-capita costs.
 
     `price` picks the cost column: "cost", "cost_constant" or "cost_uncached".
     """
@@ -96,6 +121,7 @@ def monthly(price: str = "cost") -> list[dict]:
       sum(weight) AS calls, (date_trunc('month', created_at) >= DATE '{REGIME_CHANGE}') AS post
     FROM '{costs.path()}' GROUP BY ALL ORDER BY month"""
     rows = duckdb.sql(sql).fetchall()
+    pop = population()
     out: dict = {}
     for month, cat, usd, tokens, calls, post in rows:
         m = out.setdefault(month, {"month": month, "post": post})
@@ -117,5 +143,15 @@ def monthly(price: str = "cost") -> list[dict]:
         m["transaction_share_hi"] = (m["exchange_usd"] + m["work_usd"] * s.hi) / total
         m["usd_per_exchange"] = m["exchange_usd"] / m["exchange_calls"]
         m["tokens_per_exchange"] = m["exchange_tokens"] / m["exchange_calls"]
+        p = pop[m["month"]]
+        m["agents_in_month"] = p["agents"]
+        m["agents_per_day"] = p["agent_days"] / p["days"]
+        m["agent_days"] = p["agent_days"]
+        m["agent_hours"] = p["agent_hours"]
+        m["hours_per_agent_day"] = p["agent_hours"] / p["agent_days"]
+        m["usd_per_agent_hour"] = total / p["agent_hours"]
+        m["transaction_usd_per_agent_hour"] = m["transaction_share"] * total / p["agent_hours"]
+        m["tokens_per_agent_hour"] = m["total_tokens"] / p["agent_hours"]
+        m["exchanges_per_agent_hour"] = m["exchange_calls"] / p["agent_hours"]
         result.append(m)
     return result

@@ -37,33 +37,61 @@ def style(ax, title):
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
 
 
+def line(ax, months, ys, color=BLUE, label=None):
+    ax.plot(months, ys, color=color, linewidth=2, marker="o", markersize=4, label=label)
+
+
 def main() -> None:
     rows = wn.monthly("cost")
     const = {r["month"]: r["total_usd"] for r in wn.monthly("cost_constant")}
     upper = {r["month"]: r["total_usd"] for r in wn.monthly("cost_uncached")}
     months = [r["month"] for r in rows]
     width = 22  # days
+    xlim = (date(2025, 3, 15), date(2026, 9, 20))
 
-    fig, axes = plt.subplots(
-        4, 1, figsize=(10, 13), sharex=True, gridspec_kw={"height_ratios": [1, 1.6, 0.8, 0.8]}
-    )
+    fig = plt.figure(figsize=(14, 17))
     fig.patch.set_facecolor(SURFACE)
+    grid = fig.add_gridspec(4, 2, height_ratios=[1, 1, 1.5, 1], hspace=0.6, wspace=0.15)
+    ax_gdp, ax_pop = fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1])
+    ax_pc, ax_freq = fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])
+    ax_share = fig.add_subplot(grid[2, :])
+    ax_usd, ax_tok = fig.add_subplot(grid[3, 0]), fig.add_subplot(grid[3, 1])
 
-    # A. Village GDP
-    ax = axes[0]
-    style(ax, "Village GDP: model spend per month (USD)")
-    ax.fill_between(months, [r["total_usd"] for r in rows], [upper[m] for m in months],
-                    color=BLUE, alpha=0.15, linewidth=0,
-                    label="Upper bound: no caching on OpenAI-family calls")  # fmt: skip
-    ax.plot(months, [r["total_usd"] for r in rows], color=BLUE, linewidth=2,
-            label="Prices in force at the time")  # fmt: skip
-    ax.plot(months, [const[m] for m in months], color=ORANGE, linewidth=2,
-            label="Constant prices (2026-09-15)")  # fmt: skip
-    ax.yaxis.set_major_formatter(lambda v, _: f"${v / 1000:.0f}k")
-    ax.legend(frameon=False, fontsize=8, labelcolor=INK_2, loc="upper left")
+    # Village GDP
+    style(ax_gdp, "Village GDP: model spend per month (USD)")
+    ax_gdp.fill_between(months, [r["total_usd"] for r in rows], [upper[m] for m in months],
+                        color=BLUE, alpha=0.15, linewidth=0,
+                        label="Upper bound: no caching on OpenAI-family calls")  # fmt: skip
+    ax_gdp.plot(months, [r["total_usd"] for r in rows], color=BLUE, linewidth=2,
+                label="Prices in force at the time")  # fmt: skip
+    ax_gdp.plot(months, [const[m] for m in months], color=ORANGE, linewidth=2,
+                label="Constant prices (2026-09-15)")  # fmt: skip
+    ax_gdp.yaxis.set_major_formatter(lambda v, _: f"${v / 1000:.0f}k")
+    ax_gdp.legend(frameon=False, fontsize=8, labelcolor=INK_2, loc="upper left")
 
-    # B. Transaction sector share, stacked
-    ax = axes[1]
+    # Population
+    style(ax_pop, "Population: agents active per village day (monthly mean)")
+    line(ax_pop, months, [r["agents_per_day"] for r in rows])
+    ax_pop.axvline(date(2026, 6, 29), color=MUTED, linewidth=1, linestyle=(0, (1, 2)))
+    ax_pop.text(date(2026, 6, 29), 2, " 4h → 8h days\n (Jun 29)", fontsize=7, color=MUTED)
+    ax_pop.set_ylim(bottom=0)
+
+    # Per capita spend
+    style(ax_pc, "Spend per agent-hour (USD)")
+    line(ax_pc, months, [r["usd_per_agent_hour"] for r in rows], BLUE, "All spend")
+    line(ax_pc, months, [r["transaction_usd_per_agent_hour"] for r in rows], ORANGE,
+         "Transaction sector")  # fmt: skip
+    ax_pc.set_ylim(bottom=0)
+    ax_pc.yaxis.set_major_formatter(lambda v, _: f"${v:.0f}")
+    ax_pc.legend(frameon=False, fontsize=8, labelcolor=INK_2, loc="center right")
+
+    # Exchange frequency
+    style(ax_freq, "Exchange actions per agent-hour")
+    line(ax_freq, months, [r["exchanges_per_agent_hour"] for r in rows])
+    ax_freq.set_ylim(bottom=0)
+
+    # Transaction sector share, stacked
+    ax = ax_share
     style(ax, "Transaction sector as a share of village GDP")
     layers = [
         ("Exchange actions (chat, rooms, requests)", BLUE, None, lambda r: r["exchange_usd"]),
@@ -97,34 +125,33 @@ def main() -> None:
     ax.set_ylim(0, 1)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
     ax.legend(handles=handles, frameon=False, fontsize=8, labelcolor=INK_2,
-              loc="upper center", bbox_to_anchor=(0.5, -0.04), ncol=2)  # fmt: skip
+              loc="upper center", bbox_to_anchor=(0.5, -0.07), ncol=4)  # fmt: skip
 
-    # C, D. Unit cost of one exchange action
-    ax = axes[2]
-    style(ax, "Cost of one exchange action (USD, prices in force)")
-    ax.plot(months, [r["usd_per_exchange"] for r in rows], color=BLUE, linewidth=2,
-            marker="o", markersize=4)  # fmt: skip
-    ax.set_ylim(bottom=0)
-    ax.yaxis.set_major_formatter(lambda v, _: f"${v:.2f}")
-    ax = axes[3]
-    style(ax, "Tokens per exchange action (input + output)")
-    ax.plot(months, [r["tokens_per_exchange"] for r in rows], color=BLUE, linewidth=2,
-            marker="o", markersize=4)  # fmt: skip
-    ax.set_ylim(bottom=0)
-    ax.yaxis.set_major_formatter(lambda v, _: f"{v / 1000:.0f}k")
-    for a in axes:
+    # Unit cost of one exchange action
+    style(ax_usd, "Cost of one exchange action (USD, prices in force)")
+    line(ax_usd, months, [r["usd_per_exchange"] for r in rows])
+    ax_usd.set_ylim(bottom=0)
+    ax_usd.yaxis.set_major_formatter(lambda v, _: f"${v:.2f}")
+    style(ax_tok, "Tokens per exchange action (input + output)")
+    line(ax_tok, months, [r["tokens_per_exchange"] for r in rows])
+    ax_tok.set_ylim(bottom=0)
+    ax_tok.yaxis.set_major_formatter(lambda v, _: f"{v / 1000:.0f}k")
+
+    for a in fig.axes:
+        a.set_xlim(*xlim)
         a.text(REGIME, a.get_ylim()[1], " always-in-computer-use\n scaffolding (Mar 24)",
                fontsize=7, color=MUTED, va="top")  # fmt: skip
 
     fig.suptitle("AI Village: a Wallis-North transaction sector, sized in model spend",
-                 x=0.06, ha="left", fontsize=14, color=INK)  # fmt: skip
-    fig.text(0.06, 0.005,
-             "Spend from data/derived/costs.parquet. Transaction work inside computer use is the "
-             "hand-labelled transaction share of work spend (separately before/after Mar 24) "
-             "times work spend.\nSource: AI Digest / AI Village dataset (aidigestorg/ai-village), "
-             "export of 2026-09-20.",
+                 x=0.06, y=0.985, ha="left", fontsize=15, color=INK)  # fmt: skip
+    fig.text(0.06, 0.012,
+             "Agent-hours: each agent's span from first to last model call per village (PT) day. "
+             "Transaction work inside computer use = hand-labelled transaction share of work spend "
+             "(separately before/after Mar 24) x work spend.\nSource: AI Digest / AI Village "
+             "dataset (aidigestorg/ai-village), export of 2026-09-20. Spend from "
+             "data/derived/costs.parquet.",
              fontsize=7, color=MUTED)  # fmt: skip
-    fig.tight_layout(rect=(0, 0.02, 1, 0.97))
+    fig.subplots_adjust(left=0.06, right=0.97, top=0.95, bottom=0.05)
 
     out_dir = hub.data_dir() / "figures"
     out_dir.mkdir(parents=True, exist_ok=True)

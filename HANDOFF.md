@@ -85,6 +85,13 @@ uv run python scripts/plot_wallis_north.py   # data/figures/wallis_north.{png,cs
   change, so behaviour and scaffolding aren't separable there). Tokens per
   exchange action rose from about 9k to about 48k; dollars per exchange stayed
   around $0.03-0.09 as prices fell and caching grew.
+- Per capita: active agents per village day grew from 4 (mid-2025) to about 31
+  (Sep 2026), and village hours doubled on 2026-06-29. Measured from calls
+  (first to last call per agent per Pacific day: group by PT day, since the
+  9am-5pm PT window crosses UTC midnight). Spend per agent-hour fell from about
+  $6-9 to about $3.5 after March 2026; the transaction sector per agent-hour
+  from about $2.5-4 to about $1.1; exchange actions per agent-hour from 15-45
+  to 3-5.
 
 ## Next steps
 
