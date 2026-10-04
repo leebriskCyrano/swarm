@@ -82,6 +82,11 @@ raw `.jsonl.gz`.
 - Timestamps (`created_at`, UTC) are authoritative. The village clock is
   Pacific time.
 
+## Research
+
+`docs/methodology.md` describes the Wallis-North transaction-sector method
+built on this package; `docs/papers/` has the reference papers.
+
 ## Development
 
 ```sh
