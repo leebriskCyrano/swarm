@@ -10,9 +10,12 @@ the other industries. The village analogue, built on costs.parquet:
 - Work turns are everything else an agent does in computer use. Some are
   transaction work (emailing, commenting, reviewing another agent's PR,
   trading, monitoring others): the in-firm transaction occupations. Their
-  share can't be read off the action, so it's estimated from hand-labelled,
-  cost-weighted samples of work turns (work_turn_labels.csv), separately
-  before and after the 2026-03-24 perma-computer-use change.
+  share can't be read off the action. It's estimated per month from an LLM's
+  labels on cost-weighted samples of work turns (work_turn_llm_labels.csv,
+  see `classify`), corrected for the LLM's error rates on the hand-labelled
+  turns (work_turn_labels.csv). Months without LLM labels fall back to the
+  hand-labelled share for their regime (before or after the 2026-03-24
+  perma-computer-use change).
 - Memory consolidation, waiting and session start/stop decisions are kept as
   their own categories: whether they're transaction costs is a judgment call.
 """
@@ -20,9 +23,11 @@ the other industries. The village analogue, built on costs.parquet:
 import csv
 import math
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import duckdb
+import numpy as np
 
 from . import costs
 
@@ -38,6 +43,7 @@ WAITING = ("WAIT", "wait", "PAUSE", "pause")
 CATEGORIES = ("exchange", "work", "waiting", "memory", "session")
 REGIME_CHANGE = "2026-03-24"
 LABELS = Path(__file__).with_name("work_turn_labels.csv")
+LLM_LABELS = Path(__file__).with_name("work_turn_llm_labels.csv")
 
 
 def _quoted(xs) -> str:
@@ -84,6 +90,62 @@ def work_transaction_share() -> dict[str, Share]:
     return {regime: wilson(k, n) for regime, (k, n) in counts.items()}
 
 
+def _rows(path: Path) -> list[dict]:
+    with path.open() as f:
+        return list(csv.DictReader(f))
+
+
+def classifier_rates(sample: str | None = None) -> dict[str, tuple[int, int]]:
+    """How often the LLM says T, by hand label: {"T": (k, n), "P": (k, n), "U": (k, n)}.
+
+    k/n for T is the true-positive rate, for P the false-positive rate. An LLM
+    U counts as not-T. `sample` restricts to the "train" or "holdout" labels.
+    """
+    llm = {r["turn_id"]: r["label"] for r in _rows(LLM_LABELS)}
+    out = {"T": [0, 0], "P": [0, 0], "U": [0, 0]}
+    for r in _rows(LABELS):
+        if sample in (None, r["sample"]) and r["turn_id"] in llm:
+            c = out[r["label"]]
+            c[0] += llm[r["turn_id"]] == "T"
+            c[1] += 1
+    return {h: (k, n) for h, (k, n) in out.items()}
+
+
+def corrected(observed: float, tpr: float, fpr: float) -> float:
+    """The true share behind an observed classifier share, clipped to [0, 1]."""
+    return min(1.0, max(0.0, (observed - fpr) / (tpr - fpr)))
+
+
+def llm_work_shares(draws: int = 4000, seed: int = 0) -> dict:
+    """Transaction share of work-turn spend per month, from the LLM labels.
+
+    true = (observed - FPR) / (TPR - FPR), with TPR and FPR measured on all the
+    hand-labelled turns. The samples are cost-weighted, so label shares
+    estimate spend shares. The 95% interval is a percentile bootstrap that
+    resamples each month's sample and the T and P validation turns, so it
+    includes the uncertainty in TPR and FPR. Draws share one TPR/FPR per
+    replicate, as the months share one classifier.
+    """
+    rates = classifier_rates()
+    (kt, nt), (kp, np_) = rates["T"], rates["P"]
+    months: dict = {}
+    for r in _rows(LLM_LABELS):
+        if r["monthly_sample"] == "1":
+            c = months.setdefault(date.fromisoformat(r["month"] + "-01"), [0, 0])
+            c[0] += r["label"] == "T"
+            c[1] += 1
+    rng = np.random.default_rng(seed)
+    tpr = rng.binomial(nt, kt / nt, draws) / nt
+    fpr = rng.binomial(np_, kp / np_, draws) / np_
+    out = {}
+    for month, (k, n) in sorted(months.items()):
+        obs = rng.binomial(n, k / n, draws) / n
+        boot = np.clip((obs - fpr) / (tpr - fpr), 0, 1)
+        lo, hi = np.percentile(boot, [2.5, 97.5])
+        out[month] = Share(corrected(k / n, kt / nt, kp / np_), float(lo), float(hi), n)
+    return out
+
+
 def population() -> dict:
     """Per month: active days, agent-days and agent-hours.
 
@@ -115,6 +177,7 @@ def monthly(price: str = "cost") -> list[dict]:
     `price` picks the cost column: "cost", "cost_constant" or "cost_uncached".
     """
     shares = work_transaction_share()
+    llm = llm_work_shares() if LLM_LABELS.exists() else {}
     sql = f"""
     SELECT date_trunc('month', created_at)::DATE AS month, {CATEGORY_SQL} AS category,
       sum({price}) AS usd, sum((total_input + output) * weight) AS tokens,
@@ -133,7 +196,11 @@ def monthly(price: str = "cost") -> list[dict]:
         for cat in CATEGORIES:
             for k in ("usd", "tokens", "calls"):
                 m.setdefault(f"{cat}_{k}", 0.0)
-        s = shares["post" if m["post"] else "pre"]
+        s = llm.get(m["month"]) or shares["post" if m["post"] else "pre"]
+        m["work_share_source"] = "llm" if m["month"] in llm else "hand"
+        m["work_transaction_share"] = s.p
+        m["work_transaction_share_lo"] = s.lo
+        m["work_transaction_share_hi"] = s.hi
         total = sum(m[f"{c}_usd"] for c in CATEGORIES)
         m["total_usd"] = total
         m["total_tokens"] = sum(m[f"{c}_tokens"] for c in CATEGORIES)

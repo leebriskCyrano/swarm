@@ -9,6 +9,7 @@ dependencies = [
     "genai-prices==0.1.9",
     "huggingface-hub>=0.25",
     "matplotlib>=3.11.2",
+    "numpy>=2.4.6",
     "polars>=1.0",
     "pyarrow>=16",
 ]
