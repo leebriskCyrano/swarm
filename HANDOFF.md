@@ -21,9 +21,10 @@ Status as of 2026-10-04 (second session, later the same day), for the next sessi
   above SCHEMA.md's approximations: events 381,610 (SCHEMA says ~235k),
   computer_use_turns 2,510,487 (~1.16M), agent_memories 246,151 (~166k),
   agents 46 (31). Use the manifest, not SCHEMA.md or `tables.approx_rows`.
-- Branch: `claude/peaceful-dirac-a5epoh`. The first session's branch was
-  `claude/disk-space-availability-5r1cji`. No PR exists yet. Ask the user
-  before opening one.
+- Branch: `main` is the default branch and has everything. Earlier work happened
+  on `claude/disk-space-availability-5r1cji` (deleted) and
+  `claude/peaceful-dirac-a5epoh`. The user asked for pushes to go straight to
+  `main`.
 
 ## What the first real-data run found
 
