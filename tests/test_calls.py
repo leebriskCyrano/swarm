@@ -53,3 +53,20 @@ def test_build_writes_parquet(tmp_path, monkeypatch):
     out = calls.build("events")
     got = duckdb.sql(f"SELECT kind, reported_input, created_at FROM '{out}'").fetchall()
     assert len(got) == 1 and got[0][:2] == ("AGENT_TALK", 105)
+
+
+def test_turn_text_has_narration_and_command():
+    turn = {
+        **TURN,
+        "agent_messages": {
+            **TURN["agent_messages"],
+            "content": [
+                {"type": "text", "text": "I'll check the open issues before replying to Gemini."}
+            ],
+        },
+    }
+    (row,) = calls.turn_rows([turn])
+    text = dict(zip(calls.COLUMNS, row, strict=True))["text"]
+    assert text.startswith("I'll check the open issues") and text.endswith(
+        "gh issue list\n--limit 5"
+    )

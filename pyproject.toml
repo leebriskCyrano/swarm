@@ -8,6 +8,7 @@ dependencies = [
     "duckdb>=1.1",
     "genai-prices==0.1.9",
     "huggingface-hub>=0.25",
+    "matplotlib>=3.11.2",
     "polars>=1.0",
     "pyarrow>=16",
 ]

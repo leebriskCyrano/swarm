@@ -32,6 +32,7 @@ COLUMNS = [
     "output",
     "reported_input",  # events only: data.inputTokens / outputTokens
     "reported_output",
+    "text",  # turns: the model's narration, then the command or typed text (truncated)
 ]
 
 
@@ -57,6 +58,33 @@ def _usage_cols(response) -> list:
     return [*head, u.provider, u.input, u.cache_read, u.cache_write, u.output]
 
 
+_NARRATION_KEYS = ("text", "thinking", "summary")
+
+
+def narration(response, limit: int = 400) -> str:
+    """The model's own words in a raw response: visible text, thinking or its summary."""
+    parts: list[str] = []
+
+    def walk(o, depth: int = 0) -> None:
+        if depth > 6 or sum(map(len, parts)) >= limit:
+            return
+        if isinstance(o, dict):
+            for k in _NARRATION_KEYS:
+                v = o.get(k)
+                if isinstance(v, str) and len(v.strip()) > 20:
+                    parts.append(v.strip())
+            children = o.values()
+        elif isinstance(o, list):
+            children = o
+        else:
+            return
+        for child in children:
+            walk(child, depth + 1)
+
+    walk(response)
+    return " | ".join(parts)[:limit]
+
+
 def _first_line(s: str | None, n: int = 200) -> str | None:
     return s.strip().split("\n", 1)[0][:n] if isinstance(s, str) else None
 
@@ -67,8 +95,10 @@ def turn_rows(rows: Iterator[dict]) -> Iterator[list]:
         if isinstance(a, dict):
             kind = a.get("action") or ("command" if "command" in a else None)
             detail = _first_line(a.get("command") or a.get("text") or a.get("room"))
+            acted = a.get("command") or a.get("text") or ""
         else:
             kind = detail = None
+            acted = ""
         yield [
             "computer_use_turns",
             r["id"],
@@ -80,6 +110,7 @@ def turn_rows(rows: Iterator[dict]) -> Iterator[list]:
             *_usage_cols(r.get("agent_messages")),
             None,
             None,
+            f"{narration(r.get('agent_messages'))} ⟂ {acted[:400]}",
         ]
 
 
@@ -99,6 +130,7 @@ def event_rows(rows: Iterator[dict]) -> Iterator[list]:
             *_usage_cols(d.get("output")),
             d.get("inputTokens"),
             d.get("outputTokens"),
+            None,
         ]
 
 
@@ -117,6 +149,7 @@ def claude_code_rows(rows: Iterator[dict]) -> Iterator[list]:
             *_usage_cols(r.get("content")),
             None,
             None,
+            narration(r.get("content")),
         ]
 
 
