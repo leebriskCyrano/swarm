@@ -52,9 +52,14 @@ def _json_source(table: Table) -> str:
     path = hub.raw_path(table)
     if not path.exists():
         raise FileNotFoundError(f"{path} not found; run `aiv download {table.name}` first")
+    # sample_size=-1 infers the schema from every row, not the first 20480.
+    # With sampling, keys that first appear later (e.g. events.data.endReason)
+    # are silently dropped, and type conflicts (claude_code_messages'
+    # message.content is a string in some rows, an array in others) fail
+    # mid-query. Costs an extra pass over the file when the view is bound.
     return (
         f"read_json({_quote(str(path))}, format='newline_delimited', compression='gzip', "
-        f"maximum_object_size={_MAX_OBJECT_SIZE})"
+        f"maximum_object_size={_MAX_OBJECT_SIZE}, sample_size=-1)"
     )
 
 

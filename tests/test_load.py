@@ -39,6 +39,19 @@ def test_connect_reads_jsonl(data_dir):
         assert rel.fetchone()[0] == 2
 
 
+def test_schema_inference_sees_late_rows(data_dir):
+    # DuckDB's default sample is 20480 rows. A key that first appears after it,
+    # or a type that changes after it, must still be handled.
+    rows = [{"id": i, "data": {"actionType": "WAIT", "msg": ["a"]}} for i in range(20480)]
+    rows.append({"id": 20480, "data": {"actionType": "STOP", "endReason": "done", "msg": "x"}})
+    with gzip.open(data_dir / "raw" / "events.jsonl.gz", "wt") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+    with load.connect() as con:
+        assert con.sql("SELECT max(data.endReason) FROM events").fetchone()[0] == "done"
+        assert con.sql("SELECT count(data.msg) FROM events").fetchone()[0] == len(rows)
+
+
 def test_to_parquet_projects_columns(data_dir):
     out = load.to_parquet("events", columns=["id", "agent"])
     assert out.exists()
